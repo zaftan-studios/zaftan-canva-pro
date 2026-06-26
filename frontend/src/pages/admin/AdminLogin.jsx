@@ -8,7 +8,6 @@ import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, LogIn, Shield } from "lucide-react";
 
 // STEP 1: Define the API URL using environment variable
-// This will use VITE_API_URL from .env, or fallback to localhost for dev
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const AdminLogin = () => {
