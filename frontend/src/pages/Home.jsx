@@ -22,7 +22,8 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const Home = () => {
   const navigate = useNavigate();
   const [members, setMembers] = useState([]);
-const [stats, setStats] = useState({ active: 0, total: 500 });
+  const [stats, setStats] = useState({ active: 0, total: 500 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchMembers();

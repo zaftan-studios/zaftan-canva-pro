@@ -150,14 +150,15 @@ const AdminDashboard = () => {
         },
         body: JSON.stringify({
           email,
-          duration: parseInt(duration),
+          days: parseInt(duration, 10),
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to add member");
+        const message = data.message || data.errors?.[0]?.msg || "Failed to add member";
+        throw new Error(message);
       }
 
       setMessage("Member added successfully!");
@@ -167,7 +168,7 @@ const AdminDashboard = () => {
       fetchMembers();
       fetchStats();
     } catch (err) {
-      setMessage(err.message);
+      setMessage(err.message || "Failed to add member");
       setMessageType("error");
     } finally {
       setAdding(false);
