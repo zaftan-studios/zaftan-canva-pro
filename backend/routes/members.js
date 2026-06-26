@@ -15,6 +15,25 @@ router.get('/', async (req, res) => {
   }
 });
 
+// @route   GET /api/members/stats
+// @desc    Get membership statistics (public)
+router.get('/stats', async (req, res) => {
+  try {
+    const activeCount = await Member.countDocuments({ isExpired: false });
+    const expiredCount = await Member.countDocuments({ isExpired: true });
+    const TOTAL_SLOTS = 50;
+
+    res.json({
+      total: TOTAL_SLOTS,
+      active: activeCount,
+      expired: expiredCount,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/members/expired
 // @desc    Get all expired members
 router.get('/expired', async (req, res) => {

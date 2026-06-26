@@ -46,10 +46,11 @@ const AdminDashboard = () => {
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
     if (!token) {
-      navigate("/admins/login");
+      navigate("/admins/manage");
       return;
     }
     fetchMembers();
+    fetchExpiredMembers();
     fetchStats();
   }, [navigate]);
 
@@ -72,8 +73,7 @@ const AdminDashboard = () => {
       }
 
       const data = await response.json();
-      setMembers(data.members || []);
-      setExpiredMembers(data.expiredMembers || []);
+      setMembers(Array.isArray(data) ? data : data.members || []);
     } catch (err) {
       console.error("Error fetching members:", err);
     } finally {
@@ -81,20 +81,54 @@ const AdminDashboard = () => {
     }
   };
 
-  // STEP 3: Fetch stats using API_URL
-  const fetchStats = async () => {
+  const fetchExpiredMembers = async () => {
     try {
       const token = localStorage.getItem("adminToken");
-      const response = await fetch(`${API_URL}/api/members/stats`, {
+      const response = await fetch(`${API_URL}/api/members/expired`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleLogout();
+          return;
+        }
+        throw new Error("Failed to fetch expired members");
       }
+
+      const data = await response.json();
+      setExpiredMembers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching expired members:", err);
+    }
+  };
+
+  // STEP 3: Fetch stats using API_URL
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem("adminToken");
+      const response = await fetch(`${API_URL}/api/admin/stats`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleLogout();
+          return;
+        }
+        throw new Error("Failed to fetch stats");
+      }
+
+      const data = await response.json();
+      setStats({
+        total: data.totalMembers ?? 0,
+        active: data.activeMembers ?? 0,
+        expired: data.expiredMembers ?? 0,
+      });
     } catch (err) {
       console.error("Error fetching stats:", err);
     }
@@ -171,7 +205,7 @@ const AdminDashboard = () => {
 
     try {
       const token = localStorage.getItem("adminToken");
-      const response = await fetch(`${API_URL}/api/members/expired/${memberId}`, {
+      const response = await fetch(`${API_URL}/api/members/${memberId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -183,6 +217,7 @@ const AdminDashboard = () => {
       }
 
       fetchMembers();
+      fetchExpiredMembers();
       fetchStats();
     } catch (err) {
       console.error("Error removing expired member:", err);

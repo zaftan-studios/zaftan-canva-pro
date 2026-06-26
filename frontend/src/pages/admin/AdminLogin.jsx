@@ -44,7 +44,7 @@ const AdminLogin = () => {
       localStorage.setItem("adminUser", JSON.stringify(data.admin));
 
       // Redirect to admin dashboard
-      navigate("/admins/manage");
+      navigate("/admins/dashboard");
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");
     } finally {
