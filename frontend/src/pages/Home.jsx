@@ -22,8 +22,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const Home = () => {
   const navigate = useNavigate();
   const [members, setMembers] = useState([]);
-  const [stats, setStats] = useState({ active: 0, total: 50 });
-  const [loading, setLoading] = useState(true);
+const [stats, setStats] = useState({ active: 0, total: 500 });
 
   useEffect(() => {
     fetchMembers();
@@ -36,7 +35,7 @@ const Home = () => {
       const response = await fetch(`${API_URL}/api/members`);
       if (response.ok) {
         const data = await response.json();
-        setMembers(data.members || []);
+        setMembers(Array.isArray(data) ? data : data.members || []);
       }
     } catch (err) {
       console.error("Error fetching members:", err);
@@ -73,11 +72,6 @@ const Home = () => {
       icon: Globe,
       title: "Background Remover",
       desc: "One-click background removal",
-    },
-    {
-      icon: Shield,
-      title: "100GB Cloud Storage",
-      desc: "Store all your designs securely",
     },
   ];
 

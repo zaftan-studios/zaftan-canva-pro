@@ -21,7 +21,7 @@ router.get('/stats', async (req, res) => {
   try {
     const activeCount = await Member.countDocuments({ isExpired: false });
     const expiredCount = await Member.countDocuments({ isExpired: true });
-    const TOTAL_SLOTS = 50;
+    const TOTAL_SLOTS = 500;
 
     res.json({
       total: TOTAL_SLOTS,
