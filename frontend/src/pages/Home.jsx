@@ -36,7 +36,7 @@ const Home = () => {
       const response = await fetch(`${API_URL}/api/members`);
       if (response.ok) {
         const data = await response.json();
-        setMembers(data.members || []);
+        setMembers(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error("Error fetching members:", err);
