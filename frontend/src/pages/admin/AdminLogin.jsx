@@ -25,7 +25,7 @@ const AdminLogin = () => {
 
     try {
       // STEP 2: Use API_URL instead of hardcoded localhost
-      const response = await fetch(`${API_URL}/api/admin/login`, {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
