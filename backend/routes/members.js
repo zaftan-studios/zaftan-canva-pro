@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const Member = require('../models/Member');
-const authMiddleware = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
 // @route   GET /api/members
@@ -28,24 +27,9 @@ router.get('/expired', async (req, res) => {
   }
 });
 
-// @route   GET /api/members/stats
-// @desc    Get membership summary counts
-router.get('/stats', async (req, res) => {
-  try {
-    const total = await Member.countDocuments();
-    const active = await Member.countDocuments({ isExpired: false });
-    const expired = await Member.countDocuments({ isExpired: true });
-
-    res.json({ total, active, expired });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 // @route   POST /api/members
 // @desc    Add a new member (admin only)
-router.post('/', authMiddleware, [
+router.post('/', [
   body('email').isEmail().normalizeEmail(),
   body('days').isInt({ min: 1, max: 365 })
 ], async (req, res) => {
@@ -55,12 +39,7 @@ router.post('/', authMiddleware, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email, days, duration } = req.body;
-    const memberDays = parseInt(days ?? duration, 10);
-
-    if (!memberDays || memberDays < 1 || memberDays > 365) {
-      return res.status(400).json({ message: 'Duration must be between 1 and 365 days' });
-    }
+    const { email, days } = req.body;
 
     const existingMember = await Member.findOne({ email, isExpired: false });
     if (existingMember) {
@@ -70,11 +49,11 @@ router.post('/', authMiddleware, [
     const lastMember = await Member.findOne().sort({ serialNumber: -1 });
     const serialNumber = lastMember ? lastMember.serialNumber + 1 : 1;
 
-    const expiresAt = new Date(Date.now() + memberDays * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
     const member = new Member({
       email,
-      days: memberDays,
+      days: parseInt(days),
       expiresAt,
       serialNumber
     });
@@ -93,7 +72,7 @@ router.post('/', authMiddleware, [
 
 // @route   DELETE /api/members/:id
 // @desc    Remove a member (admin only)
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const member = await Member.findById(req.params.id);
     if (!member) {
