@@ -1,286 +1,566 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+// ============================================================
+// FILE: frontend/src/pages/admin/AdminDashboard.jsx
+// CHANGE: All API URLs now use VITE_API_URL environment variable
+// ============================================================
 
-export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState('add');
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Users,
+  Plus,
+  Trash2,
+  LogOut,
+  Bell,
+  Mail,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
+  X,
+  Menu,
+  X as CloseIcon,
+  ChevronDown,
+} from "lucide-react";
+
+// STEP 1: Define the API URL using environment variable
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+const AdminDashboard = () => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("add");
   const [members, setMembers] = useState([]);
   const [expiredMembers, setExpiredMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Add Member Form State
+  const [email, setEmail] = useState("");
+  const [duration, setDuration] = useState("30");
+  const [adding, setAdding] = useState(false);
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("");
+
+  // Stats
   const [stats, setStats] = useState({ total: 0, active: 0, expired: 0 });
-  const [formData, setFormData] = useState({ email: '', days: 30 });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const navigate = useNavigate();
 
-  const token = localStorage.getItem('adminToken');
-
+  // Check auth on mount
   useEffect(() => {
+    const token = localStorage.getItem("adminToken");
     if (!token) {
-      navigate('/admins/manage');
+      navigate("/admins/login");
       return;
     }
-    fetchData();
-  }, [token]);
+    fetchMembers();
+    fetchStats();
+  }, [navigate]);
 
-  const fetchData = async () => {
+  // STEP 2: Fetch members using API_URL
+  const fetchMembers = async () => {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [membersRes, expiredRes, statsRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/members'),
-        axios.get('http://localhost:5000/api/members/expired'),
-        axios.get('http://localhost:5000/api/admin/stats', { headers })
-      ]);
-      setMembers(membersRes.data);
-      setExpiredMembers(expiredRes.data);
-      setStats(statsRes.data);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-    }
-  };
+      const token = localStorage.getItem("adminToken");
+      const response = await fetch(`${API_URL}/api/members`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-  const handleAddMember = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleLogout();
+          return;
+        }
+        throw new Error("Failed to fetch members");
+      }
 
-    try {
-      await axios.post('http://localhost:5000/api/members', formData);
-      setMessage('✅ Member added successfully!');
-      setFormData({ email: '', days: 30 });
-      fetchData();
+      const data = await response.json();
+      setMembers(data.members || []);
+      setExpiredMembers(data.expiredMembers || []);
     } catch (err) {
-      setMessage(`❌ ${err.response?.data?.message || 'Error adding member'}`);
+      console.error("Error fetching members:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteMember = async (id) => {
-    if (!confirm('Are you sure you want to remove this member?')) return;
-    
+  // STEP 3: Fetch stats using API_URL
+  const fetchStats = async () => {
     try {
-      await axios.delete(`http://localhost:5000/api/members/${id}`);
-      fetchData();
+      const token = localStorage.getItem("adminToken");
+      const response = await fetch(`${API_URL}/api/members/stats`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
     } catch (err) {
-      console.error('Error deleting member:', err);
+      console.error("Error fetching stats:", err);
+    }
+  };
+
+  // STEP 4: Add member using API_URL
+  const handleAddMember = async (e) => {
+    e.preventDefault();
+    setAdding(true);
+    setMessage("");
+
+    try {
+      const token = localStorage.getItem("adminToken");
+      const response = await fetch(`${API_URL}/api/members`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          email,
+          duration: parseInt(duration),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to add member");
+      }
+
+      setMessage("Member added successfully!");
+      setMessageType("success");
+      setEmail("");
+      setDuration("30");
+      fetchMembers();
+      fetchStats();
+    } catch (err) {
+      setMessage(err.message);
+      setMessageType("error");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  // STEP 5: Remove member using API_URL
+  const handleRemoveMember = async (memberId) => {
+    if (!window.confirm("Are you sure you want to remove this member?")) return;
+
+    try {
+      const token = localStorage.getItem("adminToken");
+      const response = await fetch(`${API_URL}/api/members/${memberId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to remove member");
+      }
+
+      fetchMembers();
+      fetchStats();
+    } catch (err) {
+      console.error("Error removing member:", err);
+      alert("Failed to remove member");
+    }
+  };
+
+  // STEP 6: Remove expired member using API_URL
+  const handleRemoveExpired = async (memberId) => {
+    if (!window.confirm("Remove this expired member from the list?")) return;
+
+    try {
+      const token = localStorage.getItem("adminToken");
+      const response = await fetch(`${API_URL}/api/members/expired/${memberId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to remove expired member");
+      }
+
+      fetchMembers();
+      fetchStats();
+    } catch (err) {
+      console.error("Error removing expired member:", err);
+      alert("Failed to remove expired member");
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('adminToken');
-    navigate('/admins/manage');
+    localStorage.removeItem("adminToken");
+    localStorage.removeItem("adminUser");
+    navigate("/admins/login");
   };
 
-  if (!token) return null;
+  const tabs = [
+    { id: "add", label: "Add Member", icon: Plus },
+    { id: "manage", label: "Manage Members", icon: Users },
+    { id: "notifications", label: "Expired", icon: Bell },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-      {/* Admin Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 dark:bg-red-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">Z</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Admin Panel</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">ZAFTAN Studios</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2 px-4 rounded-lg transition"
-          >
-            Logout
-          </button>
-        </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Mobile Header */}
+      <div className="lg:hidden bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-gray-900 dark:text-white">
+          Admin Panel
+        </h1>
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          {sidebarOpen ? <CloseIcon size={20} /> : <Menu size={20} />}
+        </button>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 border border-gray-200 dark:border-gray-700">
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Members</div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalMembers || 0}</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 border border-gray-200 dark:border-gray-700">
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Active Members</div>
-            <div className="text-3xl font-bold text-green-600">{stats.activeMembers || 0}</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 border border-gray-200 dark:border-gray-700">
-            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Expired Members</div>
-            <div className="text-3xl font-bold text-red-600">{stats.expiredMembers || 0}</div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="flex border-b border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => setActiveTab('add')}
-              className={`flex-1 py-4 px-6 font-medium text-center transition ${
-                activeTab === 'add'
-                  ? 'text-blue-600 dark:text-red-500 border-b-2 border-blue-600 dark:border-red-500 bg-blue-50 dark:bg-red-900/20'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Add Member
-            </button>
-            <button
-              onClick={() => setActiveTab('manage')}
-              className={`flex-1 py-4 px-6 font-medium text-center transition ${
-                activeTab === 'manage'
-                  ? 'text-blue-600 dark:text-red-500 border-b-2 border-blue-600 dark:border-red-500 bg-blue-50 dark:bg-red-900/20'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Manage Members ({members.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('notifications')}
-              className={`flex-1 py-4 px-6 font-medium text-center transition ${
-                activeTab === 'notifications'
-                  ? 'text-blue-600 dark:text-red-500 border-b-2 border-blue-600 dark:border-red-500 bg-blue-50 dark:bg-red-900/20'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Notifications ({expiredMembers.length})
-            </button>
+      <div className="flex">
+        {/* Sidebar */}
+        <aside
+          className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r dark:border-gray-700 transform transition-transform duration-200 lg:transform-none ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="p-6 border-b dark:border-gray-700 hidden lg:block">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+              ZAFTAN Admin
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Canva Pro Management
+            </p>
           </div>
 
-          <div className="p-6">
-            {/* Add Member Tab */}
-            {activeTab === 'add' && (
-              <div className="max-w-md mx-auto">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Add New Member</h3>
-                
-                {message && (
-                  <div className={`mb-6 p-4 rounded-lg ${
-                    message.startsWith('✅') 
-                      ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200' 
-                      : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200'
-                  }`}>
-                    {message}
-                  </div>
-                )}
+          <nav className="p-4 space-y-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === tab.id
+                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  <Icon size={18} />
+                  {tab.label}
+                  {tab.id === "notifications" && expiredMembers.length > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {expiredMembers.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
 
-                <form onSubmit={handleAddMember} className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Member Email
-                    </label>
+          <div className="absolute bottom-0 left-0 right-0 p-4 border-t dark:border-gray-700">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <LogOut size={18} />
+              Logout
+            </button>
+          </div>
+        </aside>
+
+        {/* Overlay for mobile sidebar */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Main Content */}
+        <main className="flex-1 p-4 lg:p-8">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Total Members
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                    {stats.total}
+                  </p>
+                </div>
+                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                  <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Active
+                  </p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+                    {stats.active}
+                  </p>
+                </div>
+                <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Expired
+                  </p>
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
+                    {stats.expired}
+                  </p>
+                </div>
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Message Toast */}
+          {message && (
+            <div
+              className={`mb-6 p-4 rounded-lg flex items-center justify-between ${
+                messageType === "success"
+                  ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700"
+                  : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700"
+              }`}
+            >
+              <span className="text-sm font-medium">{message}</span>
+              <button
+                onClick={() => setMessage("")}
+                className="hover:opacity-70"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Add Member Tab */}
+          {activeTab === "add" && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                Add New Member
+              </h2>
+
+              <form onSubmit={handleAddMember} className="max-w-md space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      size={18}
+                    />
                     <input
                       type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      placeholder="member@example.com"
                       required
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 outline-none transition"
-                      placeholder="user@example.com"
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Duration (Days)
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      max="365"
-                      className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-red-500 outline-none transition"
-                      value={formData.days}
-                      onChange={(e) => setFormData({...formData, days: parseInt(e.target.value)})}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Duration (Days)
+                  </label>
+                  <div className="relative">
+                    <Clock
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      size={18}
+                    />
+                    <select
+                      value={duration}
+                      onChange={(e) => setDuration(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition appearance-none"
+                    >
+                      <option value="7">7 Days (1 Week)</option>
+                      <option value="15">15 Days</option>
+                      <option value="30">30 Days (1 Month)</option>
+                      <option value="60">60 Days (2 Months)</option>
+                      <option value="90">90 Days (3 Months)</option>
+                      <option value="180">180 Days (6 Months)</option>
+                      <option value="365">365 Days (1 Year)</option>
+                    </select>
+                    <ChevronDown
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                      size={18}
                     />
                   </div>
+                </div>
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-red-600 dark:hover:bg-red-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg transition"
-                  >
-                    {loading ? 'Adding...' : 'Add Member'}
-                  </button>
-                </form>
+                <button
+                  type="submit"
+                  disabled={adding}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-2.5 rounded-lg transition-colors"
+                >
+                  {adding ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Plus size={18} />
+                      Add Member
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Manage Members Tab */}
+          {activeTab === "manage" && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 overflow-hidden">
+              <div className="p-6 border-b dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Active Members
+                </h2>
               </div>
-            )}
 
-            {/* Manage Members Tab */}
-            {activeTab === 'manage' && (
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Active Members</h3>
-                
-                {members.length === 0 ? (
-                  <p className="text-gray-500 dark:text-gray-400 text-center py-8">No active members</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">#</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Email</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Added</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Expires</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
+              {loading ? (
+                <div className="p-8 text-center">
+                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-gray-500 dark:text-gray-400 mt-3">
+                    Loading members...
+                  </p>
+                </div>
+              ) : members.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400">
+                    No active members yet
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          #
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Email
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Added
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Expires
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {members.map((member, index) => (
+                        <tr
+                          key={member._id}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        >
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                            {index + 1}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                            {member.email}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                            {new Date(member.addedAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                            {new Date(member.expiresAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => handleRemoveMember(member._id)}
+                              className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors"
+                              title="Remove member"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {members.map((member) => (
-                          <tr key={member._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td className="px-4 py-3 text-gray-900 dark:text-white">{member.serialNumber}</td>
-                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{member.email}</td>
-                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-sm">
-                              {new Date(member.addedAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-sm">
-                              {new Date(member.expiresAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-4 py-3">
-                              <button
-                                onClick={() => handleDeleteMember(member._id)}
-                                className="text-red-600 hover:text-red-700 font-medium text-sm transition"
-                              >
-                                Remove
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
-            {/* Notifications Tab */}
-            {activeTab === 'notifications' && (
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Expired Members</h3>
-                
-                {expiredMembers.length === 0 ? (
-                  <p className="text-gray-500 dark:text-gray-400 text-center py-8">No expired members</p>
-                ) : (
-                  <div className="space-y-4">
-                    {expiredMembers.map((member) => (
-                      <div key={member._id} className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex justify-between items-center">
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">{member.email}</div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            Expired on {new Date(member.expiresAt).toLocaleDateString()}
-                          </div>
+          {/* Expired Members Tab */}
+          {activeTab === "notifications" && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 overflow-hidden">
+              <div className="p-6 border-b dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Expired Members
+                </h2>
+              </div>
+
+              {expiredMembers.length === 0 ? (
+                <div className="p-8 text-center">
+                  <CheckCircle className="w-12 h-12 text-green-300 dark:text-green-700 mx-auto mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400">
+                    No expired members
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {expiredMembers.map((member) => (
+                    <div
+                      key={member._id}
+                      className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                          <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
                         </div>
-                        <div className="bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-200 px-3 py-1 rounded-full text-sm font-medium">
-                          REMOVE FROM CANVA
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {member.email}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Expired on{" "}
+                            {new Date(member.expiresAt).toLocaleDateString()}
+                          </p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+                      <button
+                        onClick={() => handleRemoveExpired(member._id)}
+                        className="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
-}
+};
+
+export default AdminDashboard;
